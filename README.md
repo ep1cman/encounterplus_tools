@@ -1,6 +1,14 @@
 # Encounter Plus Tools
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 This is a repo of tools I have created for use with the [EncounterPlus](http://encounter.plus) app.
+
+Before using any of these scripts be sure to run the following command to install their requirements:
+
+```
+pip install -r requirements.txt
+```
 
 # add_images
 
