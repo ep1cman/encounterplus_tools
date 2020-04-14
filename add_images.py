@@ -135,7 +135,26 @@ def main(args):
         sys.exit(1)
 
     if not os.path.exists(args.compendium_path):
-        msg = "Provided file path ({}) does not exist".format(args.compendium_path)
+        msg = "Provided compendium path ({}) does not exist".format(args.compendium_path)
+        logger.error(msg)
+        sys.exit(1)
+
+    if len(args.image_paths or []) + len(args.token_paths or []) == 0:
+        msg = "An image or token directory must be provided"
+        logger.error(msg)
+        sys.exit(1)
+
+    # Find all image files
+    logging.info("Identifying Images")
+    images = []
+    for image_path in args.image_paths or []:
+        images += find_images(image_path)
+    tokens = []
+    for token_path in args.token_paths or []:
+        tokens += find_images(token_path)
+
+    if len(images) + len(tokens) == 0:
+        msg = "No images and/or tokens found"
         logger.error(msg)
         sys.exit(1)
 
@@ -168,13 +187,7 @@ def main(args):
 
             logger.debug("XML File: {}".format(xml_path))
 
-            # Find all image files
-            logging.info("Identifying Images")
-            images = find_images(args.image_path)
-            tokens = find_images(args.token_path) if args.token_path is not None else None
-
             logging.info("Parsing XML")
-
             tree = ElementTree.parse(xml_path)
             root = tree.getroot()
 
@@ -189,10 +202,10 @@ def main(args):
                 logging.debug("Found `{}`: {}".format(node.tag, name))
 
                 # What to search
-                tag_files = {
-                    "image": images
-                }
-                if node.tag == "monster" and tokens is not None:
+                tag_files = {}
+                if len(images):
+                    tag_files["image"] = images
+                if node.tag == "monster" and len(tokens):
                     tag_files["token"] = tokens
 
                 for tag, files in tag_files.items():
@@ -220,11 +233,13 @@ if __name__ == "__main__":
                                                  'using a fuzzy search algorithm.',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('compendium_path', metavar='COMPENDIUM_PATH',
-                        help='Path to compendium file, valid formats: XML, Compendium, Zip')
-    parser.add_argument('image_path', metavar='IMAGE_PATH',
+                        help='Path to compendium file, valid formats: .xml, .compendium, .zip')
+    parser.add_argument("-i", '--image_path', metavar='IMAGE_PATH', action='append',
+                        dest="image_paths",
                         help='Path to image files, valid formats: PNG, JPEG')
-    parser.add_argument('token_path', nargs='?', metavar='TOKEN_PATH',
-                        help='OPTIONAL - Path to token files, valid formats: PNG, JPEG')
+    parser.add_argument("-t", '--token_path', metavar='TOKEN_PATH', action='append',
+                        dest="token_paths",
+                        help='Path to token files, valid formats: PNG, JPEG')
 
     parser.add_argument("-o", "--output", action="store", dest="output_path",
                         default="with_images.compendium", type=str,
