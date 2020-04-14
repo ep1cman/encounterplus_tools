@@ -41,31 +41,87 @@ sub_directories = {
 }
 
 
+class Quit(Exception):
+    pass
+
+
 def find_images(path):
     images = []
     for root_dir, dirs, files in os.walk(path):
         for f in files:
-            image_name, ext = os.path.splitext(f)
-            if ext.lower() in ['.jpg', '.jpeg', '.png']:
-                found_image = (root_dir, image_name, ext)
+            if f.endswith(('.jpg', '.jpeg', '.png')):
+                found_image = os.path.join(root_dir, f)
                 images.append(found_image)
                 logging.debug("Image found: {}".format(found_image))
     return images
 
 
-def find_best_match(images, name):
+def find_best_match(images, name, tag):
     # Calculate match ratios
     ratios = []
-    for dir_path, file_name, ext in images:
+    for image_path in images:
+        # Get just the name of the file without extension
+        file_name = os.path.basename(image_path)
+        file_name, _ = os.path.splitext(file_name)
         # Strip out non alphanumeric chatacters from file name to improve matching
         non_alphanumeric_regex = re.compile(r'[\W _]+')
         cleaned_file_name = non_alphanumeric_regex.sub('', file_name)
+        # Strip out tag name from file name to improve matching e.g goblin_token.png
+        tag_regex = re.compile(tag, re.IGNORECASE)
+        cleaned_file_name = tag_regex.sub("", cleaned_file_name)
 
         ratio = fuzz.ratio(cleaned_file_name, name)
-        ratios.append((ratio, (dir_path, file_name, ext)))
+        ratios.append((ratio, image_path))
 
-    # Get best match
+    # return highest match ratio
     return max(ratios, key=lambda item: item[0])
+
+
+def add_image_to_compendium_zip(path, node_type, output_zip):
+    image_file_name = os.path.basename(path)
+    image_file_dst = os.path.join(sub_directories[node_type], image_file_name)
+
+    # If a file of the same name already exists in the output zip, add a random string
+    # to the file name until it is unique
+    while image_file_dst in output_zip.namelist():
+        random_str = ''.join(random.choices(string.ascii_lowercase, k=6))
+        file_name, extension = os.path.splitext(image_file_name)
+        image_file_name = "{}_{}{}".format(file_name, random_str, extension)
+        image_file_dst = os.path.join(sub_directories[node_type],  image_file_name)
+
+    # Add image to compendium
+    output_zip.write(path, arcname=image_file_dst)
+    logging.debug("File written to: `{}`".format(image_file_dst))
+
+
+def match(tag, name, images, auto_ratio, ask_ratio):
+    match_ratio, image_file = find_best_match(images, name, tag)
+
+    # Automatic Match
+    if match_ratio >= auto_ratio:
+        logger.detailed("Found {} for '{}': {}".format(tag, name, image_file))
+
+    # Partial Match
+    elif match_ratio >= ask_ratio:
+        msg = "Found potential {} ({}) for '{}': {}"
+        logger.info(msg.format(tag, match_ratio, name, image_file))
+
+        # Ask user if partial match is correct
+        choice = input("Use this file? y/n/q (default: y): ")
+        while choice not in ["n", "y", "", "q"]:
+            msg = "Invalid input `{}`, please use `n`, `y`, `q` (default: `y`): "
+            choice = input(msg.format(choice))
+        logging.debug("Choice: {}".format(choice))
+        if choice in "q":
+            raise Quit()
+        if choice == "n":
+            return
+    # No Match
+    else:
+        logger.debug("No match found")
+        return
+
+    return image_file
 
 
 def main(args):
@@ -115,6 +171,7 @@ def main(args):
             # Find all image files
             logging.info("Identifying Images")
             images = find_images(args.image_path)
+            tokens = find_images(args.token_path) if args.token_path is not None else None
 
             logging.info("Parsing XML")
 
@@ -128,55 +185,31 @@ def main(args):
                     logging.debug("Ignoring `{}` Tag".format(node.tag))
                     continue
 
-                tag_name = node.find("name").text
-                logging.debug("Found `{}`: {}".format(node.tag, tag_name))
+                name = node.find("name").text
+                logging.debug("Found `{}`: {}".format(node.tag, name))
 
-                # Check if compendium entry already has an image
-                if node.find("image") is not None:
-                    logging.debug("Already has an image")
-                    continue
+                # What to search
+                tag_files = {
+                    "image": images
+                }
+                if node.tag == "monster" and tokens is not None:
+                    tag_files["token"] = tokens
 
-                match_ratio, image_file_path_info = find_best_match(images, tag_name)
+                for tag, files in tag_files.items():
+                    logger.debug("Checking {}".format(tag))
+                    # Check if compendium entry already has the tag
+                    if node.find(tag) is not None:
+                        logging.debug("Already has a `{}`".format(tag))
+                        return
 
-                image_file_name = image_file_path_info[1] + image_file_path_info[2]
-                image_file_src = os.path.join(image_file_path_info[0], image_file_name)
+                    # Get matching image file
+                    image_file_path = match(tag, name, files, args.auto_ratio, args.ask_ratio)
 
-                # Automatic Match
-                if match_ratio >= args.auto_ratio:
-                    logger.detailed("Found image for '{}': {}".format(tag_name, image_file_src))
-
-                # Partial Match
-                elif match_ratio >= args.ask_ratio:
-                    msg = "Found potential match ({}) for '{}': {}"
-                    logger.info(msg.format(match_ratio, tag_name, image_file_src))
-
-                    # Ask user if partial match is correct
-                    choice = input("Use this file? y/n (default: y): ")
-                    while choice not in ["n", "y", "Y", ""]:
-                        msg = "Invalid input `{}`, please use `n`, `y` (default: `y`): "
-                        choice = input(msg.format(choice))
-                    if choice == "n":
-                        continue
-
-                # No Match
-                else:
-                    logger.debug("No match found")
-                    continue
-
-                # If a file of the same name already exists in the output zip, add a random string
-                # to the file name until it is unique
-                image_file_dst = os.path.join(sub_directories[node.tag],  image_file_name)
-                while image_file_dst in output_zip.namelist():
-                    random_str = ''.join(random.choices(string.ascii_lowercase, k=6))
-                    image_file_name = "{}_{}{}".format(image_file_path_info[1],
-                                                       random_str,
-                                                       image_file_path_info[2])
-                    image_file_dst = os.path.join(sub_directories[node.tag],  image_file_name)
-
-                # Add image to compendium
-                ElementTree.SubElement(node, "image").text = image_file_name
-                output_zip.write(image_file_src, arcname=image_file_dst)
-                logging.debug("File written to: `{}`".format(image_file_dst))
+                    # If there is a match add it to the compendium
+                    if image_file_path is not None:
+                        add_image_to_compendium_zip(image_file_path, node.tag, output_zip)
+                        file_name = os.path.basename(image_file_path)
+                        ElementTree.SubElement(node, tag).text = file_name
 
             # Add xml to the output zip
             logging.info("Outputting Compendium")
@@ -231,5 +264,12 @@ if __name__ == "__main__":
 
     try:
         main(args)
+    except Quit:
+        if os.path.exists(args.output_path):
+            logger.debug("Deleting {}".format(args.output_path))
+            os.remove(args.output_path)
     except Exception as e:
         logger.exception("Unhandled error occured", exc_info=True)
+        if os.path.exists(args.output_path):
+            logger.debug("Deleting {}".format(args.output_path))
+            os.remove(args.output_path)
