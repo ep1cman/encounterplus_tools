@@ -20,8 +20,9 @@ import re
 
 from xml.etree import ElementTree
 from zipfile import ZipFile
-from fuzzywuzzy import fuzz
 from difflib import SequenceMatcher
+
+from fuzzywuzzy import fuzz
 
 logging.DETAILED = 15
 logger = logging.getLogger(__name__)
