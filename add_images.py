@@ -94,15 +94,15 @@ def add_image_to_compendium_zip(path, node_type, output_zip):
     logging.debug("File written to: `{}`".format(image_file_dst))
 
 
-def match(tag, name, images, auto_ratio, ask_ratio):
+def match(tag, name, images, auto_percent, ask_percent):
     match_ratio, image_file = find_best_match(images, name, tag)
 
     # Automatic Match
-    if match_ratio >= auto_ratio:
+    if match_ratio >= auto_percent:
         logger.detailed("Found {} for '{}': {}".format(tag, name, image_file))
 
     # Partial Match
-    elif match_ratio >= ask_ratio:
+    elif match_ratio >= ask_percent:
         msg = "Found potential {} ({}) for '{}': {}"
         logger.info(msg.format(tag, match_ratio, name, image_file))
 
@@ -216,7 +216,7 @@ def main(args):
                         return
 
                     # Get matching image file
-                    image_file_path = match(tag, name, files, args.auto_ratio, args.ask_ratio)
+                    image_file_path = match(tag, name, files, args.auto_percent, args.ask_percent)
 
                     # If there is a match add it to the compendium
                     if image_file_path is not None:
@@ -246,11 +246,11 @@ if __name__ == "__main__":
                         help="How much similarity there has to be between the compendium entry name"
                              " and the file name for an automatic match."
                              " Range 0-100, if set to 1, only exact matches will be used.")
-    parser.add_argument("-m", "--match", action="store", dest="auto_ratio", default=80, type=float,
+    parser.add_argument("-m", "--match", action="store", dest="auto_percent", default=80, type=float,
                         help="How much similarity there has to be between the compendium entry name"
                              " and the file name for an automatic match."
-                             " Range 0-100, if set to 1, only exact matches will be used.")
-    parser.add_argument("-a", "--ask", action="store", dest="ask_ratio", default=50, type=float,
+                             " Range 0-100, if set to 100, only exact matches will be used.")
+    parser.add_argument("-a", "--ask", action="store", dest="ask_percent", default=50, type=float,
                         help="How much similarity there has to be between the compendium entry name"
                              " and the file name for the script to ask the user for confirmation."
                              " Range 0-1.0, this should be lower than `match` otherwise this"
