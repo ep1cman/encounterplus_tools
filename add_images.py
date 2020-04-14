@@ -243,9 +243,7 @@ if __name__ == "__main__":
 
     parser.add_argument("-o", "--output", action="store", dest="output_path",
                         default="with_images.compendium", type=str,
-                        help="How much similarity there has to be between the compendium entry name"
-                             " and the file name for an automatic match."
-                             " Range 0-100, if set to 1, only exact matches will be used.")
+                        help="Path of the output compendium archive")
     parser.add_argument("-m", "--match", action="store", dest="auto_percent", default=80, type=float,
                         help="How much similarity there has to be between the compendium entry name"
                              " and the file name for an automatic match."
@@ -253,7 +251,7 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--ask", action="store", dest="ask_percent", default=50, type=float,
                         help="How much similarity there has to be between the compendium entry name"
                              " and the file name for the script to ask the user for confirmation."
-                             " Range 0-1.0, this should be lower than `match` otherwise this"
+                             " Range 0-100, this should be lower than `match` otherwise this"
                              " feature is dsabled.")
     parser.add_argument(
         "-v",
